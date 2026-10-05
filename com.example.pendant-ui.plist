@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keeps the UI running at http://localhost:8766. Replace YOU with your username,
+     copy to ~/Library/LaunchAgents/, then:
+     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.pendant-ui.plist -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.example.pendant-ui</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/YOU/pendant-sync/.venv/bin/python</string>
+    <string>/Users/YOU/pendant-sync/ui.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/YOU/pendant-sync</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string></dict>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/YOU/pendant-sync/logs/ui.log</string>
+  <key>StandardErrorPath</key><string>/Users/YOU/pendant-sync/logs/ui.log</string>
+</dict></plist>

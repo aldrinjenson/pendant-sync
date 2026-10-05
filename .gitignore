@@ -1,0 +1,9 @@
+.venv/
+pendant-cli/
+models/
+data/
+logs/
+status.json
+.sync.lock
+.sync.running
+__pycache__/

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pendant Transcripts</title>
+<style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #75736c; --line: #e3e1da;
+  --accent: #d9480f; --accent-soft: #fde4d6; --good: #2f9e44; --bad: #c92a2a; --hl: #fff3bf;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #121211; --panel: #1b1b1a; --ink: #ecebe6; --muted: #9a978e; --line: #2c2b29;
+          --accent: #ff7a3d; --accent-soft: #3a2116; --good: #51cf66; --bad: #ff6b6b; --hl: #5c4b00; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+.app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+aside { border-right: 1px solid var(--line); padding: 20px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+main { padding: 20px 28px 60px; max-width: 900px; }
+@media (max-width: 760px) { .app { grid-template-columns: 1fr; } aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); } main { padding: 16px; } }
+h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
+.meta { color: var(--muted); font-size: 12px; }
+.status { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 14px 0; }
+.status .row { display: flex; justify-content: space-between; padding: 2px 0; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 8px; }
+button:disabled { opacity: .6; cursor: default; }
+input[type=search] { width: 100%; font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.days { list-style: none; padding: 0; margin: 14px 0 0; }
+.days li { padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; }
+.days li:hover { background: var(--panel); }
+.days li.sel { background: var(--accent-soft); }
+.days .d { font-weight: 500; }
+.entry { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+.entry header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.entry .t { font-weight: 600; font-variant-numeric: tabular-nums; }
+.entry audio { height: 30px; margin-left: auto; max-width: 260px; }
+.entry p { margin: 0; white-space: pre-wrap; }
+mark { background: var(--hl); color: inherit; border-radius: 3px; padding: 0 1px; }
+.empty { color: var(--muted); padding: 40px 0; text-align: center; }
+h2 { font-size: 16px; margin: 0 0 14px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Pendant</h1>
+    <div class="meta">Transcripts synced from your Limitless Pendant</div>
+    <div class="status" id="status">Loading…</div>
+    <input type="search" id="q" placeholder="Search all transcripts">
+    <ul class="days" id="days"></ul>
+  </aside>
+  <main id="main"><div class="empty">Loading…</div></main>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mins = s => s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
+const ago = iso => { if (!iso) return 'never'; const s = (Date.now() - new Date(iso)) / 1000;
+  return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)} min ago` : s < 86400 ? `${(s/3600).toFixed(1)} h ago` : `${Math.floor(s/86400)} d ago`; };
+const fmtDay = d => new Date(d + 'T12:00').toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+let selected = null;
+
+async function loadStatus() {
+  const st = await (await fetch('/api/status')).json();
+  const ok = st.connected && !st.last_error;
+  $('#status').innerHTML = `
+    <div class="row"><span><span class="dot" style="background:var(${ok ? '--good' : '--bad'})"></span>${ok ? 'In range' : 'Not reachable'}</span><span>${st.battery != null ? '🔋 ' + st.battery + '%' : ''}</span></div>
+    <div class="row meta"><span>Last sync</span><span>${ago(st.last_success)}</span></div>
+    <div class="row meta"><span>Last attempt</span><span>${ago(st.last_attempt)}</span></div>
+    ${st.last_error ? `<div class="meta" style="margin-top:4px">${esc(st.last_error)}</div>` : ''}
+    <button class="primary" id="sync" ${st.syncing ? 'disabled' : ''}>${st.syncing ? 'Syncing…' : 'Sync now'}</button>`;
+  $('#sync').onclick = async () => { await fetch('/api/sync', {method: 'POST'}); loadStatus(); };
+}
+
+async function loadDays() {
+  const ds = await (await fetch('/api/days')).json();
+  $('#days').innerHTML = ds.map(d => `<li data-day="${d.day}" class="${d.day === selected ? 'sel' : ''}"><span class="d">${fmtDay(d.day)}</span><span class="meta">${d.count} · ${mins(d.seconds)}</span></li>`).join('')
+    || '<li class="meta">No transcripts yet</li>';
+  document.querySelectorAll('#days li[data-day]').forEach(li => li.onclick = () => { $('#q').value = ''; showDay(li.dataset.day); });
+  if (!selected && ds.length) showDay(ds[0].day);
+  if (!ds.length) $('#main').innerHTML = '<div class="empty">No transcripts yet. Talk near the Pendant, then press Sync now.</div>';
+}
+
+function entryHtml(e, q, showDay) {
+  let text = esc(e.text);
+  if (q) text = text.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<mark>${m}</mark>`);
+  return `<div class="entry"><header><span class="t">${showDay ? fmtDay(e.day) + ' · ' : ''}${e.time}</span><span class="meta">${mins(e.seconds)}</span>
+    <audio controls preload="none" src="/audio/${encodeURI(e.audio.replace(/^data\//, 'data/'))}"></audio></header><p>${text}</p></div>`;
+}
+
+async function showDay(day) {
+  selected = day;
+  document.querySelectorAll('#days li').forEach(li => li.classList.toggle('sel', li.dataset.day === day));
+  const es = await (await fetch('/api/day/' + day)).json();
+  $('#main').innerHTML = `<h2>${new Date(day + 'T12:00').toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'})}</h2>`
+    + (es.length ? es.slice().reverse().map(e => entryHtml(e)).join('') : '<div class="empty">Nothing this day.</div>');
+}
+
+let t;
+$('#q').oninput = () => { clearTimeout(t); t = setTimeout(async () => {
+  const q = $('#q').value.trim();
+  if (!q) return selected && showDay(selected);
+  const hits = await (await fetch('/api/search?q=' + encodeURIComponent(q))).json();
+  $('#main').innerHTML = `<h2>${hits.length} result${hits.length === 1 ? '' : 's'} for “${esc(q)}”</h2>` + hits.map(e => entryHtml(e, q, true)).join('');
+}, 250); };
+
+loadStatus(); loadDays();
+setInterval(() => { loadStatus(); if (!$('#q').value) loadDays(); }, 15000);
+</script>
+</body>
+</html>
